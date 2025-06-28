@@ -16,6 +16,13 @@ def create_app():
     db.init_app(app)
     CORS(app)
 
+    # MODELLERİ BURADA İMPORT ET
+    from . import models
+
+    # TABLOLARI OLUŞTUR
+    with app.app_context():
+        db.create_all()
+
     @app.route('/')
     def home():
         return "Backend çalışıyor 🟢"
