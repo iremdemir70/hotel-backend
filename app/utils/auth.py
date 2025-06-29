@@ -7,12 +7,13 @@ from app.models import User
 
 def generate_token(user):
     payload = {
-        "sub": str(user.id),
+        "user_id": user.id,  # ← sub yerine bunu koy
         "email": user.email,
         "exp": datetime.utcnow() + timedelta(hours=3)
     }
     token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm="HS256")
     return token
+
 
 
 def admin_required(f):

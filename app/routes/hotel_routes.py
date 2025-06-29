@@ -332,7 +332,7 @@ def get_hotel_by_id(hotel_id):
         400: {'description': 'Eksik bilgi'}
     }
 })
-# @token_required
+@token_required
 def post_comment(current_user):
     data = request.get_json()
 
