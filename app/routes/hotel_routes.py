@@ -8,7 +8,7 @@ from app.utils.auth import token_required
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.models import User
 from datetime import datetime, timedelta
-
+from sqlalchemy import func
 
 hotel_bp = Blueprint("hotels", __name__)
 
@@ -29,44 +29,26 @@ hotel_bp = Blueprint("hotels", __name__)
             'in': 'query',
             'type': 'integer',
             'required': False,
-            'description': 'Misafir sayısı (şu an için filtrelemede kullanılmıyor)'
+            'description': 'Misafir sayısı'
         },
         {
             'name': 'start_date',
             'in': 'query',
             'type': 'string',
             'required': False,
-            'description': 'Check-in tarihi (YYYY-MM-DD formatında)'
+            'description': 'Check-in tarihi (YYYY-MM-DD)'
         },
         {
             'name': 'end_date',
             'in': 'query',
             'type': 'string',
             'required': False,
-            'description': 'Check-out tarihi (YYYY-MM-DD formatında)'
+            'description': 'Check-out tarihi (YYYY-MM-DD)'
         }
     ],
     'responses': {
         200: {
-            'description': 'Otel listesi başarıyla getirildi',
-            'examples': {
-                'application/json': [
-                    {
-                        "id": 1,
-                        "name": "Mersin Deluxe Hotel",
-                        "location": "Mersin, Türkiye",
-                        "price": 1450.0,
-                        "rating": 8.9,
-                        "image_url": "https://example.com/image.jpg",
-                        "latitude": 36.39,
-                        "longitude": 34.07,
-                        "is_flagged": True,
-                        "discount_percent": 15,
-                        "member_price": 1232,
-                        "message": "Üye fiyatı için giriş yapın"
-                    }
-                ]
-            }
+            'description': 'Otel listesi başarıyla getirildi'
         }
     }
 })
@@ -92,14 +74,12 @@ def get_hotels():
 
     if start_date and end_date:
         selected_dates = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
-
         subquery = db.session.query(HotelAvailability.hotel_id).filter(
             HotelAvailability.date.in_(selected_dates),
             HotelAvailability.is_available == True
         ).group_by(HotelAvailability.hotel_id).having(
             db.func.count(HotelAvailability.hotel_id) == len(selected_dates)
         ).subquery()
-
         query = query.filter(Hotel.id.in_(subquery))
 
     hotels = query.order_by(Hotel.rating.desc()).limit(10).all()
@@ -113,12 +93,26 @@ def get_hotels():
         if user_id and hotel.discount_percent:
             member_price = round(total_price * (100 - hotel.discount_percent) / 100)
 
+        # Yorum sayısı
+        comment_count = Comment.query.filter_by(hotel_id=hotel.id).count()
+
+        # Ortalama rating
+        avg_rating = db.session.query(func.avg(
+            (Rating.cleanliness + Rating.service + Rating.facilities + Rating.location + Rating.eco_friendliness) / 5
+        )).join(Comment, Rating.comment_id == Comment.id).filter(Comment.hotel_id == hotel.id).scalar()
+
+        # Olanaklar
+        amenity_names = [ha.amenity.name for ha in hotel.amenities if ha.amenity]
+
         result.append({
             "id": hotel.id,
             "name": hotel.name,
             "location": hotel.location,
             "price": round(total_price, 2),
             "rating": hotel.rating,
+            "rating_average": round(avg_rating, 1) if avg_rating else None,
+            "comment_count": comment_count,
+            "amenities": amenity_names,
             "image_url": hotel.image_url,
             "latitude": hotel.latitude,
             "longitude": hotel.longitude,
@@ -127,8 +121,58 @@ def get_hotels():
             "member_price": member_price,
             "message": "Üye fiyatı için giriş yapın" if hotel.is_flagged and not user_id else ""
         })
-    return jsonify(result), 200  
 
+    return jsonify(result), 200
+
+#get hotels weekend
+
+@hotel_bp.route("/hotels/weekend", methods=["GET"])
+@jwt_required(optional=True)
+def get_weekend_hotels():
+    user_id = None
+    try:
+        user_id = get_jwt_identity()
+    except:
+        pass
+
+    hotels = Hotel.query.filter_by(available_on_weekend=True)\
+        .order_by(Hotel.rating.desc())\
+        .limit(3).all()
+
+    result = []
+    for hotel in hotels:
+        base_price = hotel.price
+        member_price = None
+        if user_id and hotel.discount_percent:
+            member_price = round(base_price * (100 - hotel.discount_percent) / 100)
+
+        # Ortalama rating
+        avg_rating = db.session.query(func.avg(
+            (Rating.cleanliness + Rating.service + Rating.facilities + Rating.location + Rating.eco_friendliness) / 5
+        )).join(Comment, Rating.comment_id == Comment.id).filter(Comment.hotel_id == hotel.id).scalar()
+
+        comment_count = Comment.query.filter_by(hotel_id=hotel.id).count()
+        amenity_names = [ha.amenity.name for ha in hotel.amenities if ha.amenity]
+
+        result.append({
+            "id": hotel.id,
+            "name": hotel.name,
+            "location": hotel.location,
+            "price": round(base_price, 2),
+            "rating": hotel.rating,
+            "rating_average": round(avg_rating, 1) if avg_rating else None,
+            "comment_count": comment_count,
+            "amenities": amenity_names,
+            "image_url": hotel.image_url,
+            "latitude": hotel.latitude,
+            "longitude": hotel.longitude,
+            "is_flagged": hotel.is_flagged,
+            "discount_percent": hotel.discount_percent,
+            "member_price": member_price,
+            "message": "Üye fiyatı için giriş yapın" if hotel.is_flagged and not user_id else ""
+        })
+
+    return jsonify(result), 200
 
 
 #POST HOTELS
