@@ -10,7 +10,24 @@ Deployed at: [Vercel](https://hotel-frontend-lemon.vercel.app)
 This project is a hotel listing and search web application where users can search hotels based on city, dates, and number of guests. The project consists of a **Flask-based backend** and an **Angular frontend**, both deployed online for public access.
 
 ---
+## Data Model
+The application uses a PostgreSQL database hosted on Supabase. Here is a brief overview of the data model:
+- **User**: Stores personal info and login method (Google/email).
+- **Hotel**: Includes name, price, location, coordinates, rating, image.
+- **Amenity / HotelAmenity**: Many-to-many relation between hotels and features.
+- **Comment / Rating**: Each comment has a detailed rating (5 aspects).
+- **HotelAvailability**: Used for filtering hotels by available dates.
 
+---
+
+## Assumptions
+
+- Only hotel **searching and viewing** is implemented, not booking.
+- Users log in via **Google OAuth or email-password**.
+- Hotel locations are shown on **Google Maps** with price markers.
+- Supabase is used privately through env vars.
+
+---
 ## Backend - Flask API
 
 ### Features
